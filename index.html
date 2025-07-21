@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>MIDI Router</title>
+  <style>
+    body { font-family: sans-serif; padding: 2em; background: #f9f9f9; }
+    label, select { display: block; margin: 0.5em 0; }
+    select { width: 300px; max-width: 100%; }
+    .status { margin-top: 1em; color: green; }
+  </style>
+</head>
+<body>
+  <h1>MIDI Passthrough Router</h1>
+
+  <label for="inputSelect">MIDI Input(s):</label>
+  <select id="inputSelect" multiple size="6"></select>
+
+  <label for="outputSelect">MIDI Output:</label>
+  <select id="outputSelect"></select>
+
+  <p class="status" id="status">Initializing MIDI...</p>
+
+  <script>
+    let midiAccess;
+    let selectedInputs = [];
+    let selectedOutput = null;
+
+    const inputSelect = document.getElementById("inputSelect");
+    const outputSelect = document.getElementById("outputSelect");
+    const status = document.getElementById("status");
+
+    function populateMIDIOptions() {
+      inputSelect.innerHTML = '';
+      outputSelect.innerHTML = '';
+
+      for (let input of midiAccess.inputs.values()) {
+        const option = document.createElement("option");
+        option.value = input.id;
+        option.textContent = input.name;
+        inputSelect.appendChild(option);
+      }
+
+      for (let output of midiAccess.outputs.values()) {
+        const option = document.createElement("option");
+        option.value = output.id;
+        option.textContent = output.name;
+        outputSelect.appendChild(option);
+      }
+
+      if (midiAccess.inputs.size === 0 || midiAccess.outputs.size === 0) {
+        status.textContent = "⚠️ No MIDI devices found.";
+      } else {
+        status.textContent = "🎹 Ready — select inputs and output.";
+      }
+    }
+
+    function attachInputListeners() {
+      // Clear all current listeners
+      for (const input of midiAccess.inputs.values()) {
+        input.onmidimessage = null;
+      }
+
+      // Get selected input devices
+      selectedInputs = Array.from(inputSelect.selectedOptions)
+        .map(opt => midiAccess.inputs.get(opt.value))
+        .filter(Boolean);
+
+      for (const input of selectedInputs) {
+        input.onmidimessage = onMIDIMessage;
+      }
+    }
+
+    function updateOutput() {
+      const outputId = outputSelect.value;
+      selectedOutput = midiAccess.outputs.get(outputId);
+    }
+
+    function onMIDIMessage(event) {
+      if (!selectedOutput) return;
+      selectedOutput.send(event.data);
+    }
+
+    navigator.requestMIDIAccess().then(access => {
+      midiAccess = access;
+      populateMIDIOptions();
+      attachInputListeners();
+      updateOutput();
+
+      midiAccess.onstatechange = () => {
+        populateMIDIOptions();
+        attachInputListeners();
+        updateOutput();
+      };
+    }).catch(err => {
+      status.textContent = "❌ MIDI initialization failed: " + err;
+    });
+
+    inputSelect.addEventListener("change", attachInputListeners);
+    outputSelect.addEventListener("change", updateOutput);
+  </script>
+</body>
+</html>
